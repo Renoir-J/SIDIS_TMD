@@ -1,0 +1,141 @@
+using QuadGK
+
+# ----------------------------
+# Constants / benchmarks
+# ----------------------------
+const γE = 0.5772156649015328606
+b0_default() = 2*exp(-γE)   # b0 = 2 e^{-γE} from Paper
+
+# ----------------------------
+# Log definitions from your screenshot
+# ----------------------------
+"""
+Lp = ln( |b_perp|^2 * μ^2 / b0^2 )
+Input:
+  b  : |b_perp| (GeV^-1)
+  μ  : renormalization scale (GeV)
+"""
+function Lp_from(b::Real, μ::Real; b0::Real=b0_default())
+    return log((b*b)*(μ*μ)/(b0*b0))
+end
+
+"""
+Lh = ln( Q^2 / μ^2 )
+Input:
+  Q  : hard scale (GeV)
+  μ  : renormalization scale (GeV)
+"""
+Lh_from() = 0 # CS kernal Lh = 0, 
+
+# ----------------------------
+# Toy collinear FFs at μ0
+# ----------------------------
+dq_toy(z::Real; Nq::Real=1.0) = (z <= 0 || z >= 1) ? 0.0 : Nq * z^0.5 * (1 - z)^2
+dg_toy(z::Real; Ng::Real=1.0) = (z <= 0 || z >= 1) ? 0.0 : Ng * z^1.0 * (1 - z)^5
+
+# ----------------------------
+# Matching coefficients you provided (NLO split)
+# ----------------------------
+function C1_FF_qq_Reg(z::Real; Lp::Real=0.0)
+    if z <= 0 || z > 1
+        return 0.0
+    end
+    logz = log(z)
+    return (
+        2.66667
+        - 3.44742*z^4 + 0.818297*z^5 - 0.128696*z^6
+        + 5.33333*logz
+        + z*(-2.66879 + 5.33333*logz)
+        + z^2*(-0.842818 + 10.467*logz)
+        + z^3*(-7.0639 + 6.88266*logz)
+        + Lp*(2.66667 + 2.66667*z)
+    )
+end
+
+function C1_FF_qq_Delta(; Lp::Real=0.0, Lh::Real=0.0)
+    return (-2.19325 - 1.33333*Lp^2 - 2.66667*Lp*Lh)
+end
+
+function C1_FF_qq_Plus(; Lp::Real=0.0)
+    return (-5.33333*Lp)
+end
+
+# as (Lp (5.33333 - 5.33333/z - 2.66667 z) - 10.6667 Log[z] + (
+#     10.6667 Log[z])/z + z (2.66667 + 5.33333 Log[z]))
+function C1_FF_gq_Reg(z::Real; Lp::Real=0.0)
+    if z <= 0 || z > 1
+        return 0.0
+    end
+    logz = log(z)
+    return (
+        Lp*(5.33333 - 5.33333/z - 2.66667*z)
+        - 10.6667*logz  
+        + (10.6667*logz)/z
+        + z*(2.66667 + 5.33333*logz)
+    )
+end
+
+# ----------------------------
+# plus distribution convolution helper
+# ----------------------------
+function conv_plusD0(z::Real, f::Function; rtol)
+    if z <= 0 || z >= 1
+        return 0.0
+    end
+    f1 = f(1.0)
+    integrand(y) = ((1.0/y) * f(y) - f1) / (1.0 - y)
+    val, _ = quadgk(integrand, z, 1.0; rtol=rtol) # rtol is the relative tolerance
+    return val + f1*log1p(-z)  # log(1-z)
+end
+
+# ----------------------------
+# Up-quark TMDFF up to NLO
+# Inputs now: z, b, μ, Q  (Lp and Lh computed inside)
+# a_s = αs(μ)/(4π) should be provided or computed outside.
+# ----------------------------
+function TMDFF_u_NLO(; z::Float64, b::Float64, μ::Float64, Q::Float64, # here mu is defined as b0/b, b0 = 1.123GeV
+    a_s::Float64, Nq::Float64=105.0/16.0, Ng::Float64=42.0,
+    D_u::Union{Nothing, Function}=nothing, D_g::Union{Nothing, Function}=nothing,
+    use_dataset::Bool=false, iset::Int64=1,
+    b0::Float64=b0_default(), rtol::Float64=1e-4)
+
+if !(0.0 < z < 1.0)
+return 0.0
+end
+
+Lp = Lp_from(b, μ; b0=b0)
+Lh = Lh_from()
+
+# Define closures first to avoid scope issues in nested integrand functions.
+du_of_y_real = (y -> dq_toy(z/y; Nq=Nq))
+dg_of_y_real = (y -> dg_toy(z/y; Ng=Ng))
+LO = dq_toy(z; Nq=Nq)
+
+if D_u !== nothing
+du_of_y_real = (y -> D_u(z/y, μ)) # user-provided real u FF from dataset
+LO = D_u(z, μ)
+elseif use_dataset
+du_of_y_real = (y -> get_pdfs(iset, z/y, μ)[1]) # u from LHAPDF-like set
+LO = get_pdfs(iset, z, μ)[1]
+end
+
+if D_g !== nothing
+dg_of_y_real = (y -> D_g(z/y, μ)) # user-provided real gluon FF from dataset
+elseif use_dataset
+dg_of_y_real = (y -> get_pdfs(iset, z/y, μ)[0]) # gluon from LHAPDF-like set
+end
+
+integrand_qq_reg(y) = (1.0/y) * C1_FF_qq_Reg(y; Lp=Lp) * du_of_y_real(y)
+Iqq_reg, _ = quadgk(integrand_qq_reg, z, 1.0; rtol=rtol)
+
+Iqq_delta = C1_FF_qq_Delta(Lp=Lp, Lh=Lh) * LO
+
+Iqq_plus  = C1_FF_qq_Plus(Lp=Lp) * conv_plusD0(z, du_of_y_real; rtol=rtol)
+
+integrand_gq_reg(y) = (1.0/y) * C1_FF_gq_Reg(y; Lp=Lp) * dg_of_y_real(y)
+Igq_reg, _ = quadgk(integrand_gq_reg, z, 1.0; rtol=rtol)
+
+NLO = a_s * (Iqq_reg + Iqq_delta + Iqq_plus + Igq_reg)
+
+return (LO + NLO) / (z^2)
+end

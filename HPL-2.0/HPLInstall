@@ -1,0 +1,259 @@
+#!/bin/bash
+Minimalsetlist=`ls MinimalSet?.m`
+Minimalsetlistpm=`ls MinimalSetpm?.m`
+htablelist=`ls h?table.mat` 
+HPLatIlist=`ls HPLatI?.m` 
+numHPLatIlist=`ls numHPLatI?.m` 
+
+HPLExecutables="HPLUninstall"
+filestocopy="$htablelist $Minimalsetlist $HPLatIlist $numHPLatIlist $Minimalsetlistpm  nmzv.m .HPLversion "
+
+
+possibleinstallationpath="$HOME/HPL $PWD Other"
+
+
+function hpl_find_platform() {
+
+
+case $HOSTTYPE in 
+*linux* ) platform=linux ;;
+power_pc|intel_pc|*mac*|powerpc) platform=mac ;;
+*) echo "Could not determine the type of platform, please choose the most appropriate:";
+platforms="mac linux";
+select platform in ${platforms};
+do
+    if  [ -z $platform ] ; then
+    	echo "Please choose a number between 1 and 2"
+    fi
+    break
+done
+;;
+esac
+case $platform in 
+linux) initmdir=$HOME/.Mathematica/Autoload ;;
+mac) initmdir=$HOME/Library/Mathematica/Autoload ;;
+esac
+echo "Platform: "$platform
+}
+
+function find_old_version() {
+
+OldHPLPath=`grep "HPLPath =" $initm | grep -o "\".*\""| grep -o "[^\"].*[^\"]"`
+#OldHPLPath=`sed -n "/HPLPath =/{s/\\\$HPLPath = \"\(.*\)\"/\1/;p}" $initm`
+#thisHPLversion=`sed -n "/HPL/s/HPL version \([0-9].[0-9]\)/\1/;p" .HPLversion`
+thisHPLversion=`grep -o "[0-9].[0.9].*"  .HPLversion`
+if [ -e $OldHPLPath/.HPLversion ] ; then
+#thatHPLversion=`sed -n "/HPL/s/HPL version \([0-9].[0-9]\)/\1/;p" $OldHPLPath/.HPLversion`
+thatHPLversion=`grep -o "[0-9].[0.9].*" $OldHPLPath/.HPLversion`
+else thatHPLversion="0.0"
+fi
+
+if [ "$thatHPLversion" == "$thisHPLversion" ]; then
+    echo "Version  $thatHPLversion is already installed in 
+    	$OldHPLPath, 
+do you want to reinstall it somewhere else or overwrite it ?"
+    choices="reinstall overwrite abort"
+    select choice in ${choices};
+    do 
+    case $choice in
+    	reinstall)  use_old_path="false";    break ;;
+    	overwrite) use_old_path="true"; HPLPath=$OldHPLPath;   break ;;
+    	abort) exit 0 ;;
+    	*) echo "Please enter either 1,2 or 3"
+    esac
+    done
+
+else 
+echo "There is already a version of HPL installed (version $thatHPLversion), the version this script installs is $thisHPLversion. 
+Do you want to replace 
+     version $thatHPLversion 
+with 
+     version $thisHPLversion?"
+choices="replace abort"
+select choice in ${choices};
+do 
+case $choice in
+    replace)     break ;;
+    abort) exit 0 ;;
+    *) echo "Please enter either 1 or 2"
+esac
+done
+fi
+}
+
+
+
+
+function copy_files() {
+if [ $HPLPath != $PWD ] ; then 
+    [ -e $HPLPath/HPL.m ] && {
+    	echo "There is already a version of HPL.m in the directory..."
+    	echo -n "Deleting old version........................"
+    	rm $HPLPath/HPL.m
+    	echo  "Done"
+    	}
+    echo -n "Copying the package HPL.................."
+    cp -f $PWD/HPL.m $HPLPath
+    echo  "Done"
+
+    echo -n "Copying the auxiliary files................."
+    
+    chmod +x $HPLExecutables
+    cp -f $HPLExecutables $HPLPath
+    
+    cp -f  $filestocopy $HPLPath
+    
+    echo  "Done"
+fi
+
+}
+
+function choose_install_dir() {
+echo "Please select the name of the directory where"
+echo "the package should be installed."
+echo 
+select installationpath in ${possibleinstallationpath};
+do
+    if ! [ -z $installationpath ] ; then
+        if [ $installationpath == Other ]; then
+        	echo "Please give the full path of the directory to install the package:"
+        	read useripath
+        	echo
+		mkdir -p $useripath || { echo "unable to create directory, exiting...";exit; }
+	   	ipath=$useripath   		
+    	else
+    	    ipath=$installationpath;
+    	fi
+    	break;
+    else 
+    	echo "Please choose a number between 1 and 3}"
+    fi
+done
+echo
+echo "installing package in $ipath ..."
+
+HPLPath=$ipath
+
+if ! [ -d $HPLPath ]; then
+    mkdir -p $HPLPath ;
+fi
+
+}
+
+# install_init_m 
+
+function install_init_m() {
+echo "(* begin of the lines added by HPL *)">install.m
+echo "\$HPLPath = \"$HPLPath\"" >> install.m
+echo "If[Not[MemberQ[\$Path,\$HPLPath]],\$Path = Flatten[{\$Path, \$HPLPath }]];">>install.m
+echo "(* end of the lines added by HPL *)">>install.m
+
+grep "HPLPath" $initm >& /dev/null && { 
+    echo "Found HPL lines in initialisation file, replacing with new........."
+    sed "/begin of the lines added by HPL/,/end of the lines added by HPL/d" $initm >HPL.init.m.temp
+    cp HPL.init.m.temp $initm; rm HPL.init.m.temp;echo "Done" 
+}  
+cat install.m >> $initm;
+}
+
+function find_math {
+
+MATH=""
+echo "Locating mathematica executable ..."
+which MathKernel >& /dev/null && { 
+    MATH=`which MathKernel`
+    } || { 
+    which math >& /dev/null && { 
+    	MATH=`which math`
+    }
+}
+
+if [ -z $MATH ] ; then 
+    echo "not found, trying harder... " 
+    all=`locate MathKernel | grep '/MathKernel$'`
+    allex=""
+    for file in $all ; do
+    	if [ -x $file ] ; then 
+    	    allex="$allex $file"; 
+    	fi
+    done
+    echo
+    echo "The following executables have been found, please choose the one that should be used to check the installation. If you don't want to check the installation, choose \"none\", if you want to provide another executable, choose \"other\" 
+"
+    choices="$allex other none"
+    while [ -z $MATH ] ; do
+    	select choice in ${choices};
+    	do 
+    	    case $choice in
+    	    	none) MATH="none";return 1 ; break ;;
+    	    	other) read MATH ;break ;;
+    	    	*) MATH=$choice; break ;;
+    	    esac
+    	done
+    	if ! [[ -x $MATH ]] ; then
+    	    echo "The executable could not be found, please try again."
+    	    MATH=""
+    	fi
+    done
+fi
+echo "using 
+$MATH 
+as path for the mathematica executable."
+}
+
+
+function check_install(){
+    MATH=""
+    find_math && {
+    	$MATH -run "Quit[]" < HPLnolicense >& /dev/null ||{
+    	    failure=math
+	    return 1
+    	}	
+        $MATH < HPLInstallTest.m >& /dev/null && {
+    	    echo "Installation successful!"
+    	    echo 
+    	    echo The package can now be called with:
+    	    echo
+    	    echo  "    \" <<HPL\` \" "
+    	    echo
+    	    return 0
+        }
+    	failure=initm
+    	return 1
+    }
+    failure=math
+    return 1
+}
+
+function kernel_trick() {
+    Kinitm=$initmdir/../Kernel/init.m
+    echo "Get[ToFileName[\"$initmdir\",\"init.m\"]]" >> $Kinitm; 
+}
+
+echo
+echo 
+echo "*********************************************"
+echo This installs the HPL Mathematica Package...
+echo "*********************************************"
+echo
+
+hpl_find_platform
+initm=$initmdir/init.m
+
+
+grep "HPLPath" $initm  >& /dev/null && { find_old_version; }
+if ! [ "$use_old_path" == "true" ] ; then choose_install_dir; fi
+copy_files    
+echo -n "Checking installation: .... "
+install_init_m
+
+check_install || {
+    case $failure in 
+    	math) echo "The installation could not be checked since the command math could not be run." ; return 0 ;;
+    	initm)	kernel_trick;; 
+    esac
+    check_install || {
+    	echo Installation check failed 
+    } 
+}    
+

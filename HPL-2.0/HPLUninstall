@@ -1,0 +1,33 @@
+#!/bin/bash
+Minimalsetlist=`ls ./MinimalSet?.m`
+htablelist=`ls ./h?table.mat ` 
+
+HPLExecutables="HPLUninstall"
+
+filestodelete="HPL.m HPLUninstall .HPLversion $htablelist $Minimalsetlist " 
+
+initmdir=$HOME/.Mathematica/Autoload
+initm=$initmdir/init.m
+
+echo -n "Are you sure you want to uninstall the package HPL? "
+read response
+echo
+
+case $response in
+    y | yes | ja | si | oui | sure)     [ -e $initm ] && sed "/begin of the lines added by HPL/,/end of the lines added by HPL/d" $initm >HPL.init.m.temp
+    cp HPL.init.m.temp $initm
+    rm HPL.init.m.temp ;;
+    *) exit 0
+esac
+echo 
+
+echo "Should the files of the directory"
+echo $PWD 
+echo -n "be deleted (including libraries)? " 
+read reply
+case $reply in
+    y | yes | ja | si | oui | sure) 
+    rm $filestodelete
+         ;;
+    *) echo "uninstall finished whitout remove files"; rm HPL.init.m.temp;exit 0
+esac 

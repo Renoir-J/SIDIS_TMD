@@ -1,0 +1,100 @@
+%%%%%%%%%% HPL %%%%%%%%%%%%%% 
+
+The Mathematica package HPL  is an implementation of the harmonic polylogarithms (HPL) of Remiddi and Vermaseren. The package contains implementation of
+
+-the product algebra,
+-derivatives,
+-some simple integrations
+-reduction to more common functions (log's, polylog's, Nielsen polylog's)
+-singular behaviour extraction
+-analytic continuation (with control over the sign of the imaginary parts)
+-change of arguments (x = -t,x = t²,  x = 1-t, x =  1/t , x =  t/(t-1), x = (1-t)/(1+t)  )
+-numerical evaluation
+-values at argument 1, multiple zeta values (MZV's)
+
+A detailed description and many examples can be found in  hep-ph/0507152
+
+------------------------------------
+Installation (Linux)
+------------------------------------
+
+There is an installation program with the package. It copies the files where they belong, updates your init.m file, so that you can load the package without having to give the whole path.
+
+To install the package, copy the tar file HPL-N.x.tar.gz  to your disk, unpack it with
+
+> gunzip HPL-N.x.tar.gz
+> tar -xf  HPL-N.x.tar
+
+Change directory to the HPL-N.x directory
+
+> cd  HPL-N.x
+
+Change the permission of the installation script:
+
+> chmod +x HPLInstall
+
+Execute it:
+
+> ./HPLinstall
+
+Follow the instruction...
+
+------------------------------------
+Installation (Windows)
+------------------------------------
+
+There is no installation script for Windows. It copies the files where they belong, updates your init.m file, so that you can load the package without having to give the whole path.
+
+To install the package,
+
+- copy the tar file HPL-N.x.tar.gz  to your disk, where you want the package to be,
+
+-unpack it
+
+-copy and download in the directory HPL-N.x all the additional tables (see below) you need (this can also be done afterwards).
+
+The package can be called with
+
+$HPLPath="the:\path\of\the\installation"
+
+Get[ToFileName[{$HPLPath},"HPL.m"]]
+
+If you do not want to type this each time, you can add the following lines to your init.m file in the AutoLoad directory of your Mathematica installation.
+
+$HPLPath="the:\path\of\the\installation"
+$Path=Flatten[{$Path,$HPLPath}]
+
+In the next sessions you can then load the package with <<HPL` only.
+
+------------------------------------
+Additional tables for weights higer than 6
+------------------------------------
+
+The reduction to a minimal set and the values at one and i requires quite large tables. In order not to use unnecessarily the memory, the tables for weight higer than 6 are not included in the basis package (the HPL-N.x.tar.gz file). If the user needs the HPL's of weight higher than 6, he can simply add the required files into the installation directiory of HPL and unzip them (> gunzip MinimalSet?.m.gz). The new tables will be loaded automatically in the next Mathematica session.
+
+The additional tables can be downloaded from the home page:
+
+http://krone.physik.unizh.ch/~maitreda/HPL/
+
+------------------------------------
+Uninstall HPL
+------------------------------------
+
+Under Linux, run the program
+
+> ./HPLuninstall
+
+in the installation directory of  HPL. Under Windows remove the files of the installation.
+
+------------------------------------
+Bug reports
+------------------------------------
+
+Great care has been taking in testing  the HPL package.  However, if there were problem left we would appreciate to get bug reports. Please use the Email  address of the home page 
+
+http://krone.physik.unizh.ch/~maitreda/HPL/
+
+to send bug reports. 
+
+--- last update: 14 sept 2005
+
